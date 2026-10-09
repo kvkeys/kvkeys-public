@@ -1,0 +1,217 @@
+<title>kvkeys system architecture</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* layout: one column, the diagram first, the ADR log under it; a narrow mono key for ids and dates */
+:root{--bg:#003a70;--fg:#eaf2ff;--muted:#c6dbf7;--line:#5b87c4;--panel:#003a70;--accent:#90c986;--warn:#ffa39e;--new:#ffd166;--thin:#9dbee8;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;--sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;color-scheme:dark}
+/* single-theme by decision (ADR-0004): the readykeys navy ground; green = the pairing that holds, yellow = the accent for what is being built, salmon = Proton Pass, out of our hands */
+body{background:var(--bg);background-image:linear-gradient(#00305c 1px,transparent 1px),linear-gradient(90deg,#00305c 1px,transparent 1px);background-size:28px 28px;color:var(--fg);font-family:var(--sans);margin:0;padding-block:28px;padding-inline:max(16px,4vw);line-height:1.5}
+main{max-width:1040px;margin:0 auto;display:grid;gap:28px}
+h1{font-size:1.6rem;margin:0;text-wrap:balance;font-weight:600;font-family:var(--mono)}h2{font-size:1.05rem;margin:0 0 8px;font-weight:600}
+.eyebrow{font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+p{max-width:68ch;margin:0}
+figure{margin:0;background:var(--panel);border:1px solid var(--line);padding:16px;overflow-x:auto;border-radius:0}
+figure svg{max-width:100%;height:auto;display:block;font-family:var(--sans);font-size:12px}
+figcaption{font-size:.85rem;color:var(--muted);margin-top:10px;max-width:80ch}
+.key{display:flex;gap:18px;flex-wrap:wrap;font-size:.8rem;color:var(--muted);margin-top:8px}
+.key span::before{content:"";display:inline-block;width:22px;height:0;border-top:2px solid currentColor;vertical-align:middle;margin-right:6px}
+.key .acc{color:var(--accent)}.key .warn{color:var(--warn)}.key .new{color:var(--new)}.key .dash::before{border-top-style:dashed}
+table{border-collapse:collapse;width:100%;font-size:.9rem}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{font-weight:500;color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.06em}
+td.id{font-family:var(--mono);white-space:nowrap;font-variant-numeric:tabular-nums}
+.status{display:inline-block;padding:1px 8px;border-radius:0;font-size:.75rem;font-family:var(--mono);border:1px solid var(--line)}
+.status.accepted{color:var(--accent);border-color:var(--accent)}.status.proposed{color:var(--new);border-color:var(--new)}
+.wrap{overflow-x:auto}
+ol.how{margin:0;padding-left:1.2em;max-width:72ch}
+code{font-family:var(--mono);font-size:.85em}
+</style>
+<main>
+<header>
+<div class="eyebrow">ADR log · system architecture · kvmachines</div>
+<h1>kvkeys system architecture</h1>
+<p>How one Proton account, 20 mailboxes, Chrome Canary profiles, the Claude desktop app and the kvkeys-in-chrome extension fit together. Each Architecture Decision Record below changes one thing in the drawing; the drawing is the current state, the log is how it got there.</p>
+</header>
+
+<figure>
+<svg viewBox="0 0 1000 600" role="img" aria-label="Request paths between the Claude desktop app, the per-account bridge, Chrome Canary profiles with their shims and extensions, and the Proton identities behind them">
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>
+<marker id="arrow-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/></marker>
+<marker id="arrow-new" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--new)"/></marker>
+</defs>
+<g fill="none" stroke="currentColor" stroke-width="1.2">
+<!-- Proton account column -->
+<rect x="20" y="40" width="200" height="440" rx="6" stroke-dasharray="4 3"/>
+<rect x="40" y="90" width="160" height="34" rx="4" fill="var(--panel)"/>
+<rect x="40" y="150" width="160" height="34" rx="4" fill="var(--panel)"/>
+<rect x="40" y="200" width="160" height="34" rx="4" fill="var(--panel)"/>
+<rect x="40" y="250" width="160" height="34" rx="4" fill="var(--panel)"/>
+<rect x="40" y="330" width="160" height="34" rx="4" fill="var(--panel)" stroke="var(--warn)"/>
+<!-- Canary column -->
+<rect x="300" y="40" width="360" height="440" rx="6" stroke-dasharray="4 3"/>
+<rect x="320" y="90" width="320" height="150" rx="4" fill="var(--panel)"/>
+<rect x="336" y="126" width="130" height="30" rx="4" fill="var(--panel)" stroke="var(--new)"/>
+<rect x="490" y="126" width="134" height="30" rx="4" fill="var(--panel)"/>
+<rect x="336" y="176" width="288" height="30" rx="4" fill="var(--panel)" stroke="var(--warn)"/>
+<rect x="320" y="270" width="320" height="60" rx="4" fill="var(--panel)" stroke-dasharray="3 3"/>
+<rect x="320" y="380" width="320" height="60" rx="4" fill="var(--panel)"/>
+<!-- desktop column -->
+<rect x="740" y="40" width="240" height="440" rx="6" stroke-dasharray="4 3"/>
+<rect x="760" y="90" width="200" height="60" rx="4" fill="var(--panel)"/>
+<rect x="760" y="200" width="200" height="60" rx="4" fill="var(--panel)"/>
+<rect x="760" y="330" width="200" height="60" rx="4" fill="var(--panel)"/>
+<!-- brand-registry (ADR-0004): one registry, three consumers -->
+<rect x="300" y="530" width="360" height="50" rx="0" fill="var(--panel)" stroke="var(--new)"/>
+<line x1="480" y1="530" x2="480" y2="440" stroke="var(--new)" marker-end="url(#arrow-new)"/>
+<line x1="320" y1="555" x2="120" y2="555" stroke="var(--new)" stroke-dasharray="3 3" marker-end="url(#arrow-new)"/>
+<line x1="640" y1="555" x2="860" y2="555" stroke="var(--new)" stroke-dasharray="3 3" marker-end="url(#arrow-new)"/>
+<rect x="20" y="540" width="100" height="30" rx="0" fill="var(--panel)" stroke="var(--line)"/>
+<rect x="860" y="540" width="120" height="30" rx="0" fill="var(--panel)" stroke="var(--line)"/>
+<!-- edges -->
+<line x1="200" y1="107" x2="320" y2="107" marker-end="url(#arrow)"/>
+<line x1="200" y1="167" x2="320" y2="300" stroke-dasharray="3 3" marker-end="url(#arrow)"/>
+<line x1="200" y1="217" x2="320" y2="300" stroke-dasharray="3 3" marker-end="url(#arrow)"/>
+<line x1="200" y1="347" x2="336" y2="191" stroke="var(--warn)" marker-end="url(#arrow)"/>
+<line x1="640" y1="141" x2="760" y2="230" stroke="var(--accent)" stroke-width="1.8" marker-start="url(#arrow-acc)" marker-end="url(#arrow-acc)"/>
+<line x1="760" y1="120" x2="640" y2="120" marker-end="url(#arrow)"/>
+<line x1="860" y1="150" x2="860" y2="200" marker-end="url(#arrow)"/>
+<line x1="860" y1="260" x2="860" y2="330" marker-end="url(#arrow)"/>
+<line x1="760" y1="360" x2="640" y2="410" marker-end="url(#arrow)"/>
+<line x1="480" y1="380" x2="480" y2="240" marker-end="url(#arrow)"/>
+<line x1="401" y1="156" x2="401" y2="176" stroke="var(--new)" marker-end="url(#arrow-new)"/>
+<line x1="401" y1="206" x2="401" y2="270" stroke="var(--new)" stroke-dasharray="3 3" marker-end="url(#arrow-new)"/>
+</g>
+<g fill="currentColor">
+<text x="30" y="64" font-weight="600">Proton · alex.zhouk@proton.me</text>
+<text x="30" y="80" fill="var(--muted)" font-size="11">20 addresses, Workspace Standard</text>
+<text x="48" y="111">design@kvmachines.com</text>
+<text x="48" y="171">legal@kvmachines.com</text>
+<text x="48" y="221">data@kvmachines.com</text>
+<text x="48" y="271">… 17 more</text>
+<text x="48" y="351" fill="var(--warn)">Proton Pass (secrets, aliases)</text>
+<text x="310" y="64" font-weight="600">Chrome Canary 157 · one profile per identity</text>
+<text x="310" y="80" fill="var(--muted)" font-size="11">display name = the identity's email</text>
+<text x="330" y="112" font-weight="500">Profile 18 · design@ · signed into claude.ai as design@</text>
+<text x="344" y="145" fill="var(--new)">kvkeys-in-chrome · kv-keys.com</text>
+<text x="498" y="145">Claude in Chrome ext.</text>
+<text x="344" y="195" fill="var(--warn)">Proton Pass extension · fills, never read by us</text>
+<text x="330" y="292" fill="var(--muted)">Profiles 7, 19, 12, … · same shape, one per identity</text>
+<text x="330" y="312" fill="var(--muted)" font-size="11">each pairs its own account's bridge</text>
+<text x="330" y="402" font-weight="500">Shim .app per profile</text>
+<text x="330" y="420" fill="var(--muted)" font-size="11">Chrome loader (PWA installed) or launcher: open -na Canary --profile-directory --app</text>
+<text x="750" y="64" font-weight="600">Claude desktop app</text>
+<text x="750" y="80" fill="var(--muted)" font-size="11">signed in as one account at a time</text>
+<text x="770" y="112">bridge.claudeusercontent.com</text>
+<text x="770" y="130" fill="var(--muted)" font-size="11">/chrome/&lt;account id&gt;</text>
+<text x="770" y="222">Claude Code session</text>
+<text x="770" y="240" fill="var(--muted)" font-size="11">tools: tabs, find, file_upload, js</text>
+<text x="770" y="352">canary-shim mod</text>
+<text x="770" y="370" fill="var(--muted)" font-size="11">/canary · band · 20 s poll of main.log</text>
+<text x="310" y="550" font-weight="500" fill="var(--new)">brand-registry · brands.kv.txt + readykeys tokens.css</text>
+<text x="310" y="568" fill="var(--muted)" font-size="11">kvmachines → kvkeys, kvkeys-in-chrome (kv-keys.com); site/&lt;domain&gt; agent-ready files; versioned from key 0 (figure 2)</text>
+<text x="30" y="560" font-size="11">sites: kvkeys.com, kvmachines.com</text>
+<text x="868" y="560" font-size="11">this ADR page, the panel</text>
+<text x="486" y="500" font-size="11" fill="var(--new)">tokens, names</text>
+<!-- edge labels -->
+<text x="225" y="100" font-size="11" fill="var(--muted)">owns the session</text>
+<text x="640" y="190" font-size="11" fill="var(--accent)" font-weight="500">pairs: same account id</text>
+<text x="660" y="112" font-size="11" fill="var(--muted)">joins its account's bridge</text>
+<text x="866" y="180" font-size="11" fill="var(--muted)">browser tools</text>
+<text x="866" y="300" font-size="11" fill="var(--muted)">reads log, opens</text>
+<text x="660" y="400" font-size="11" fill="var(--muted)">open shim</text>
+<text x="486" y="360" font-size="11" fill="var(--muted)">launches profile</text>
+<text x="408" y="170" font-size="11" fill="var(--new)">asks to fill</text>
+<text x="408" y="245" font-size="11" fill="var(--new)">routes a task to an identity</text>
+</g>
+</svg>
+<figcaption>Figure 1, state after ADR-0013. The green double arrow is the only link that makes Claude in Chrome work: the extension in a profile joins the bridge of the account it is signed into, and the desktop app listens on the bridge of the account it is signed into. Blue is kvkeys-in-chrome (ADR-0002, built; the dashed edge is the model route, solid once ADR-0003 enables Gemini Nano); orange is Proton Pass, which holds every secret and is never read by kvkeys-in-chrome.</figcaption>
+<div class="key"><span>exists today</span><span class="dash">repeated per profile</span><span class="acc">the pairing that must match</span><span class="new">kvkeys-in-chrome (ADR-0002)</span><span class="warn">Proton Pass, out of our hands</span></div>
+</figure>
+
+<figure>
+<svg viewBox="0 0 1000 470" role="img" aria-label="The KVKEYS key layout as two layers of ten: key 0 is claudia the coordinator holding project state and the versioned brand, design system, identity and roles; keys 1 to 9 are the departments; SHIFT 0 to 9 bind roles from a catalog, claude.ai's own twenty by default">
+<defs><marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+<g fill="none" stroke="currentColor" stroke-width="1.2">
+<rect x="20" y="40" width="300" height="200" rx="0" stroke="var(--new)" stroke-width="2"/>
+<rect x="340" y="40" width="640" height="200" rx="0" stroke-dasharray="4 3"/>
+<rect x="340" y="270" width="640" height="110" rx="0" stroke-dasharray="4 3"/>
+<rect x="20" y="270" width="300" height="110" rx="0" stroke-dasharray="4 3"/>
+<line x1="320" y1="140" x2="340" y2="140" marker-end="url(#arrow2)"/>
+<line x1="320" y1="320" x2="340" y2="320" stroke="var(--new)" marker-end="url(#arrow2)"/>
+<line x1="660" y1="240" x2="660" y2="270" marker-end="url(#arrow2)"/>
+<line x1="170" y1="240" x2="170" y2="270" stroke="var(--new)" marker-end="url(#arrow2)"/>
+</g>
+<g fill="currentColor">
+<text x="30" y="62" font-weight="600" fill="var(--new)">0 · claudia: projects, coordinator, brand</text>
+<text x="30" y="82" fill="var(--muted)" font-size="11">the project: where state lives (instructions, memory, threads, overview)</text>
+<text x="30" y="106">construct per product: claude.ai chat · Claude Code (beta) · Cowork</text>
+<text x="30" y="122">· enterprise search · Managed Agents (session, work, event, thread)</text>
+<text x="30" y="146" font-weight="500">versioned here, stateless under it:</text>
+<text x="30" y="164">brand (brand-registry) · design system (readykeys)</text>
+<text x="30" y="180">identity and roles (roles.kv, keymap.kv) · organization admin</text>
+<text x="30" y="204" fill="var(--muted)" font-size="11">mailbox claudia@ · replaces claude.ai's Other · IT &amp; security (admin: alex)</text>
+<text x="30" y="226" fill="var(--muted)" font-size="11">spans Pro/Max, Team, Enterprise; other agent platforms through KVKEYS</text>
+<text x="350" y="62" font-weight="600">1–9 · the departments (base layer, fixed)</text>
+<text x="350" y="86">1 data · 2 design · 3 engineering · 4 finance · 5 human-resources</text>
+<text x="350" y="104">6 legal · 7 marketing · 8 operations · 9 product-management</text>
+<text x="350" y="130" fill="var(--muted)" font-size="11">each = a claude.ai role + a knowledge-work plugin + a specialist + a mailbox + a Canary profile</text>
+<text x="350" y="160" font-weight="500">bridge (ADR-0009):</text>
+<text x="350" y="178" fill="var(--muted)" font-size="11">claude.ai department facet → plugin → specialist → key → mailbox → glyph</text>
+<text x="350" y="204" fill="var(--muted)" font-size="12">sales, the tenth department role, sits on SHIFT 0 (ADR-0014); every claude.ai role has a key</text>
+<text x="350" y="222" fill="var(--muted)" font-size="11">customer-support has a plugin but no role, mailbox or key</text>
+<text x="350" y="292" font-weight="600">SHIFT 0–9 · roles from the catalog (customizable)</text>
+<text x="350" y="314">default: 0 Sales · then claude.ai's second page in order: 1 Scientist · 2 Student</text>
+<text x="350" y="332">· 3 alex, the user (for Founder) · 4 Healthcare · 5 Writer · 6 Educator · 7 Consultant · 8 Researcher · 9 Software engineer</text>
+<text x="350" y="358" fill="var(--muted)" font-size="11">rebind any shift key to claude:&lt;slug&gt;, soc:&lt;code&gt; (SOC 2018: 23 / 98 / 459 / 867) or onet:&lt;code&gt; (1,016)</text>
+<text x="30" y="292" font-weight="600">the stateless layer</text>
+<text x="30" y="314">brand · product · specialist</text>
+<text x="30" y="332" fill="var(--muted)" font-size="11">defaulted and version-controlled from the 0 key;</text>
+<text x="30" y="348" fill="var(--muted)" font-size="11">a department or a role works inside the project</text>
+<text x="30" y="364" fill="var(--muted)" font-size="11">the coordinator opened</text>
+<text x="326" y="134" font-size="11" fill="var(--muted)">opens</text>
+<text x="668" y="260" font-size="11" fill="var(--muted)">SHIFT</text>
+<text x="176" y="260" font-size="11" fill="var(--new)">defaults</text>
+<text x="30" y="420" fill="var(--muted)" font-size="11">sources: directory/keymap.kv, coordinator/model.kv, objects.kv, catalog.kv, specialists/roles.kv, directory/bridge.kv (ADR-0008 … 0012)</text>
+</g>
+</svg>
+<figcaption>Figure 2, state after ADR-0014: claudia is a project alias, not a person. Key 0 is the coordinator across all departments: the project is where state lives, and brand, design system, identity and roles are defaulted and version-controlled there. Keys 1–9 are the nine departments (fixed). SHIFT 0–9 bind roles from the catalog, claude.ai's own twenty by default, any SOC or O*NET occupation by customization. claudia replaces Other on key 0 (projects, coordinator, brand) and alex, the user, replaces Founder on SHIFT 3; sales takes SHIFT 0 (ADR-0014), so all twenty personalizations have a key.</figcaption>
+</figure>
+
+<section>
+<h2>Decision log</h2>
+<div class="wrap"><table>
+<thead><tr><th>ADR</th><th>Date</th><th>Decision</th><th>What changed in the drawing</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td class="id">0001</td><td class="id">2026-10-09</td><td>One Canary profile per Proton identity, one dock shim per profile; the canary-shim mod names the profile to fix when the extension is not paired.</td><td>Starting point: the three columns, the green pairing edge, 15 shims.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0002</td><td class="id">2026-10-09</td><td>kvkeys-in-chrome: a per-profile MV3 extension (side panel) that knows its identity, lists the other 19, and routes a page or task to one with Chrome's built-in Prompt API; keyword rules when the model is unavailable. Secrets stay in Proton Pass.</td><td>Adds the blue node inside each profile and its two blue edges. 0.1.0 loads in Canary 157 and routes (22 identities; keyword rules while the built-in model reports unavailable).</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0004</td><td class="id">2026-10-09</td><td>brand-registry: KVMACHINES is the company and a portfolio of brands (kvmachines, kvkeys, kvkeys-in-chrome); one kv registry, the readykeys design system rendered to tokens.css that every template imports, and a generated agent-ready site folder per domain scored the way isitagentready.com scores.</td><td>Adds the registry node (bottom) feeding the extension, this page and the sites; this page now sits on the readykeys ground.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0005</td><td class="id">2026-10-09</td><td>kvkeys.com and kvmachines.com ship from sites/ as Cloudflare Workers with an AI-traffic guard on while the company raises; the agent-ready folders stay undeployed.</td><td>The sites node is guarded; the registry's site folders are dashed until the guard lifts.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0006</td><td class="id">2026-10-09</td><td>runtime/ mirrors the Claude Science runtime for the icons only (kvkeysicons, 307 names); the test bed on four operating systems.</td><td>No node; the specialists' icons come from it.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0007</td><td class="id">2026-10-09</td><td>The format is "kv lines"; kvlang is Kivy's name.</td><td>Wording only.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0008</td><td class="id">2026-10-09</td><td>Twenty Claude Science specialists, one per claude.ai work role, each with a placeholders skill.</td><td>The specialists layer under the keys (figure 2).</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0009</td><td class="id">2026-10-09</td><td>One directory model over claude.ai's Directory and our vocabulary: facets, categories, filters, tags, bridge, map, items, a glyph per concept; 12 departments, 11 bridge to knowledge-work plugins, IT &amp; security is the 0 key.</td><td>The bridge row under figure 2: department → plugin → specialist → key → mailbox.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0010</td><td class="id">2026-10-09</td><td>Twenty roles, twenty Proton addresses: sixteen by the role's name, four named (Founder alex@, Other claudia@, Product management product@, Data science data@); the two Proton addresses are the account's own.</td><td>The mailbox column of figure 2 is complete; nothing missing.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0011</td><td class="id">2026-10-09</td><td>The keypad is two layers of ten: 0 claudia, the coordinator across all departments (design system, brand, identity and roles defaulted and version-controlled there; organization administration); 1–9 our departments; SHIFT 0–9 the second ten. The *, -, . and / keys retire. The name claudia is proposed.</td><td>Figure 2 drawn: the two layers.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0012</td><td class="id">2026-10-09</td><td>The coordinator's model: the project construct product by product (claude.ai chat, Claude Code beta, Cowork, enterprise search, Managed Agents sessions/work/events/threads, Claude Science), one object glossary, and SHIFT keys bound from a role catalog (claude.ai 20 by default, SOC 2018 and O*NET by customization). Sales is open: ten department roles, nine department keys.</td><td>Figure 2's shift row reads from the catalog; the 0 key holds project state.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0014</td><td class="id">2026-10-09</td><td>No Other and no Founder: claudia is key 0 (projects, coordinator, brand; brand-voice is its brand plugin), alex is the user's own identity on SHIFT 3; Sales takes SHIFT 0 by default (the agent's proposal, one line to rebind). The bridge to academy.claude.com's eleven departments and knowledge-work-plugins is unchanged.</td><td>Figure 2: key 0 reads claudia, SHIFT 3 reads alex, SHIFT 0 reads Sales; no open seat.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0013</td><td class="id">2026-10-09</td><td>kv-keys.com is the kvkeys-in-chrome domain, registered on the operator's Cloudflare account by the agent driving the dashboard checkout in the Claudia Canary profile (order e724ac07…, $10.46/year, auto-renew). The Registrar API path waits for a token.</td><td>The kvkeys-in-chrome node carries its domain.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0015</td><td class="id">2026-10-09</td><td>claudia across every Claude surface, organized by each host's top nav and left nav; data/ holds the kv-lines records; bin/check.sh is the gate.</td><td>The coordinator's records are files, built and checked.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0016</td><td class="id">2026-10-09</td><td>claudia's sitemap: every Claude and Anthropic host through robots.txt, one record per page with the site's lastmod, maintained by merge; claude.ai read through the signed-in Chrome tab (fetch --from).</td><td>Pages are addressable facts.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0017</td><td class="id">2026-10-09</td><td>.claude/hooks/sync-origin.sh syncs the checkout with origin at session start and every turn: fast-forward on main, rebase an unpushed branch, merge a pushed one, never force-push.</td><td>Parallel sessions stop colliding on push.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0018</td><td class="id">2026-10-09</td><td>Every specialist (keys 0-9, SHIFT 0-9) has a kvkeys memory store with /MEMORY.md as its index; a specialist writes its own, claudia reads all; write memories first, /compact second; File backend on this Mac (KVKEYS_KV_FILE), the shared truth is ADR-0019.</td><td>Twenty stores; specialists/memory.kv names them.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0019</td><td class="id">2026-10-09</td><td>Redis through GitHub SSO (alex-kvm → Okta → cloud.redis.io); no password in any environment. Memory lives in the Redis Agent Memory service claudia-memory-store-us-east-1 (endpoint + Store ID public, a revocable service key as the API credential); namespaces kvmachines/&lt;specialist&gt;/&lt;scope&gt;, ownerId = specialist id; the cloud environment kvkeys-in-chrome cloned from kvagents within the 16-variable cap.</td><td>REDIS_URL retired; bin/agent_memory.py is the client.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0020</td><td class="id">2026-10-09</td><td>Each project is a shared memory store: kvmachines/projects/&lt;slug&gt;/&lt;scope&gt; (SHARED) beside the personal specialist stores (PERSONAL, ownerId); the kvkeys GitHub org is the project catalog (projects/projects.kv); read the project index, then the specialist index.</td><td>Project memory survives the session, the key and the machine.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0021</td><td class="id">2026-10-09</td><td>Redis rebuilt from scratch: one custom Agent Memory service (kvmachines-memory; custom types decision, pitfall, handoff), the tree kvmachines/specialists/&lt;id&gt; (PERSONAL) · projects/&lt;slug&gt; (SHARED) · shared, memory text as kv-lines records, the 20 + 24 local stores recreated; nothing migrated.</td><td>Redis lines up with kv-lines and the project catalog; keys regenerated.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0022</td><td class="id">2026-10-09</td><td>Service keys are named &lt;consumer&gt;-redis-&lt;YYYYMMDD&gt; and stored without the date (secrets file &lt;consumer&gt;-redis.key or API credential &lt;CONSUMER&gt;_REDIS); the operator pastes values, the agent never types a secret.</td><td>Rotation is a new dated key and an overwritten file; nothing else changes.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0023</td><td class="id">2026-10-09</td><td>Artifacts: private files in github.com/kvkeys/artifacts, public ones in github.com/kvkeys/kvkeys-public mirrored by the Cloudflare Workers Artifacts namespace (to be named kvkeys-public); ids P000N / DS000N / G000N; the registry data/artifacts.kv names every artifact across the four stores.</td><td>A published artifact is finished when its line and files are committed.</td><td><span class="status accepted">accepted</span></td></tr>
+<tr><td class="id">0003</td><td class="id">—</td><td>Turn on the built-in model per profile (Gemini Nano download) and add a context-menu "send to mailbox" that opens that mailbox's shim.</td><td>Would turn the dashed blue edge solid and add an edge from the extension to the shim.</td><td><span class="status proposed">proposed</span></td></tr>
+</tbody></table></div>
+</section>
+
+<section>
+<h2>How to extend this page</h2>
+<ol class="how">
+<li>Write <code>docs/adr/NNNN-slug.md</code> in kvcircuits/kvkeys-in-chrome with context, decision, consequences.</li>
+<li>Change exactly what the ADR decides in the SVG above (add, remove or recolor one node or edge) and add the row to the log.</li>
+<li>Republish this file to the same artifact URL; the URL is recorded in the Claude Code project memory as <code>kvkeys-architecture-adr</code>.</li>
+</ol>
+</section>
+</main>

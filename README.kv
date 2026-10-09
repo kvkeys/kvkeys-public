@@ -5,4 +5,6 @@ repo:layout -> artifacts/<P000N|DS000N|G000N>-<slug>/ holds the artifact's files
 repo:naming -> P000N pages and docs, DS000N design systems, G000N git artifacts (Cloudflare Workers Artifacts), one number per artifact for life
 repo:owner -> marketing (key 7): claudia (key 0) approves what leaves the org
 repo:registry -> kvkeys/kvkeys-in-chrome data/artifacts.kv lists every artifact across the stores; this repository holds the files
-repo:rule -> public: nothing private, nothing from ~/.config/kvkeys/secrets, nothing a brand check retires; mirrored into the Cloudflare Workers Artifacts namespace kvkeys-public
+repo:jurisdiction -> every artifact's meta.kv says jurisdiction=us|eu|both; the mirror pushes it to the Cloudflare Workers Artifacts namespace of that jurisdiction (kvkeys-public-us, kvkeys-public-eu); a jurisdiction fixes where the data is stored and processed and cannot change after the namespace exists
+repo:mirror -> bin/mirror.sh <artifact-dir>: creates the repository in the namespace (POST /client/v4/accounts/<account>/artifacts/namespaces/<ns>/repos {name}) and pushes the directory with git over HTTPS and a Bearer write token; the token is ~/.config/kvkeys/secrets/kvmachines-cloudflare-artifacts.key (never printed)
+repo:rule -> public: nothing private, nothing from ~/.config/kvkeys/secrets, nothing a brand check retires; this store is the one that matters most: a public artifact is done only when it is here and in its namespace
