@@ -1,0 +1,8 @@
+# kvkeys/kvkeys-public: everything KVMACHINES shares outside the org: the public marketing artifacts that the Cloudflare Workers Artifacts namespace mirrors (ADR-0023 of kvkeys/kvkeys-in-chrome). kv lines, not Kivy KV.
+
+repo:kind -> public artifact store of the kvkeys GitHub org
+repo:layout -> artifacts/<P000N|DS000N|G000N>-<slug>/ holds the artifact's files and a meta.kv (id, kind, owner mailbox, key, visibility, source url, updated)
+repo:naming -> P000N pages and docs, DS000N design systems, G000N git artifacts (Cloudflare Workers Artifacts), one number per artifact for life
+repo:owner -> marketing (key 7): claudia (key 0) approves what leaves the org
+repo:registry -> kvkeys/kvkeys-in-chrome data/artifacts.kv lists every artifact across the stores; this repository holds the files
+repo:rule -> public: nothing private, nothing from ~/.config/kvkeys/secrets, nothing a brand check retires; mirrored into the Cloudflare Workers Artifacts namespace kvkeys-public
